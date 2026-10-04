@@ -1,6 +1,14 @@
 --- a/drivers/power/supply/generic-adc-battery.c
 +++ b/drivers/power/supply/generic-adc-battery.c
-@@ -64,6 +64,7 @@ static void gab_ext_power_changed(struct
+@@ -4,6 +4,7 @@
+  * Copyright (C) 2012, Anish Kumar <yesanishhere@gmail.com>
+  * Copyright (c) 2023, Sebastian Reichel <sre@kernel.org>
+  */
++
+ #include <linux/interrupt.h>
+ #include <linux/platform_device.h>
+ #include <linux/power_supply.h>
+@@ -64,6 +65,7 @@
  
  static const enum power_supply_property gab_props[] = {
  	POWER_SUPPLY_PROP_STATUS,
@@ -8,10 +16,24 @@
  };
  
  /*
-@@ -98,15 +99,55 @@ static int gab_read_channel(struct gab *
- 	return ret;
- }
+@@ -90,23 +92,66 @@
+ 	int ret;
  
+ 	ret = iio_read_channel_processed(adc_bat->channel[channel], result);
+-	if (ret < 0)
++	if (ret < 0) {
+ 		dev_err(&adc_bat->psy->dev, "read channel error: %d\n", ret);
+-	else
++		return ret;
++	}
++
++	if (*result > 0 && *result < 10000)
+ 		*result *= 1000;
+ 
+-	return ret;
++	return 0;
++}
++
 +static bool gab_is_charging(struct gab *adc_bat)
 +{
 +	int volt = 0, cur = 0;
@@ -30,8 +52,8 @@
 +	}
 +
 +	return false;
-+}
-+
+ }
+ 
  static int gab_get_property(struct power_supply *psy,
  		enum power_supply_property psp, union power_supply_propval *val)
  {
@@ -64,7 +86,7 @@
  	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
  		return gab_read_channel(adc_bat, GAB_VOLTAGE, &val->intval);
  	case POWER_SUPPLY_PROP_CURRENT_NOW:
-@@ -130,8 +171,8 @@ static void gab_work(struct work_struct
+@@ -130,8 +175,8 @@
  	adc_bat = container_of(delayed_work, struct gab, bat_work);
  	status = adc_bat->status;
  
@@ -75,7 +97,7 @@
  	else if (gab_charge_finished(adc_bat))
  		adc_bat->status = POWER_SUPPLY_STATUS_NOT_CHARGING;
  	else
-@@ -139,6 +180,8 @@ static void gab_work(struct work_struct
+@@ -139,6 +184,8 @@
  
  	if (status != adc_bat->status)
  		power_supply_changed(adc_bat->psy);
@@ -84,7 +106,30 @@
  }
  
  static irqreturn_t gab_charged(int irq, void *dev_id)
-@@ -281,6 +324,7 @@ static SIMPLE_DEV_PM_OPS(gab_pm_ops, gab
+@@ -198,6 +245,14 @@
+ 	for (chan = 0; chan < ARRAY_SIZE(gab_chan_name); chan++) {
+ 		adc_bat->channel[chan] = devm_iio_channel_get(&pdev->dev, gab_chan_name[chan]);
+ 		if (IS_ERR(adc_bat->channel[chan])) {
++			if (chan == GAB_VOLTAGE)
++				adc_bat->channel[chan] = devm_iio_channel_get(&pdev->dev, "battery-voltage");
++			else if (chan == GAB_POWER)
++				adc_bat->channel[chan] = devm_iio_channel_get(&pdev->dev, "charge-voltage");
++			else if (chan == GAB_CURRENT)
++				adc_bat->channel[chan] = devm_iio_channel_get(&pdev->dev, "battery-current");
++		}
++		if (IS_ERR(adc_bat->channel[chan])) {
+ 			ret = PTR_ERR(adc_bat->channel[chan]);
+ 			if (ret != -ENODEV)
+ 				return dev_err_probe(&pdev->dev, ret, "Failed to get ADC channel %s\n", gab_chan_name[chan]);
+@@ -273,7 +328,6 @@
+ 	/* Schedule timer to check current status */
+ 	schedule_delayed_work(&adc_bat->bat_work,
+ 			      msecs_to_jiffies(JITTER_DEFAULT));
+-
+ 	return 0;
+ }
+ 
+@@ -281,6 +335,7 @@
  
  static const struct of_device_id gab_match[] = {
  	{ .compatible = "adc-battery" },
@@ -92,3 +137,21 @@
  	{ }
  };
  MODULE_DEVICE_TABLE(of, gab_match);
+@@ -288,13 +343,14 @@
+ static struct platform_driver gab_driver = {
+ 	.driver		= {
+ 		.name	= "generic-adc-battery",
+-		.pm	= &gab_pm_ops,
+ 		.of_match_table = gab_match,
++		.pm	= &gab_pm_ops,
+ 	},
+ 	.probe		= gab_probe,
+ };
++
+ module_platform_driver(gab_driver);
+ 
+-MODULE_AUTHOR("anish kumar <yesanishhere@gmail.com>");
+-MODULE_DESCRIPTION("generic battery driver using IIO");
++MODULE_AUTHOR("Anish Kumar <anish198519851985@gmail.com>");
++MODULE_DESCRIPTION("generic battery monitor driver");
+ MODULE_LICENSE("GPL");
