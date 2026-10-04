@@ -1,0 +1,27 @@
+--- a/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts
++++ b/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts
+@@ -1,8 +1,4 @@
+ // SPDX-License-Identifier: BSD-3-Clause
+-/*
+- * Copyright (c) 2025, Barnabas Czeman <barnabas.czeman@mainlining.org>
+- * Copyright (c) 2026, Vladislav Agarkov <lavacat@disroot.org>
+- */
+ /dts-v1/;
+ 
+ #include <dt-bindings/arm/qcom,ids.h>
+@@ -24,6 +20,15 @@
+ 	qcom,msm-id = <QCOM_ID_SDM439 0>;
+ 	qcom,board-id = <QCOM_BOARD_ID_QRD 8>;
+ 
++	battery: generic-adc-battery {
++		compatible = "generic-adc-battery";
++		io-channels = <&pmi632_vadc ADC5_VBAT_SNS>,
++			      <&pmi632_vadc ADC5_USB_IN_V_16>,
++			      <&pmi632_vadc ADC5_USB_IN_I_UV>;
++		io-channel-names = "battery-voltage", "charge-voltage", "battery-current";
++		status = "okay";
++	};
++
+ 	chosen {
+ 		#address-cells = <2>;
+ 		#size-cells = <2>;

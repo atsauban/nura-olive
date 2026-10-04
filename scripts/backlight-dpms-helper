@@ -1,0 +1,45 @@
+#!/bin/sh
+export DISPLAY=:0
+
+get_xauth() {
+    # 1. Check running Xorg process
+    xauth_arg=$(ps -eo args | grep -E 'Xorg.*-auth' | grep -v grep | sed -n 's/.*-auth \([^ ]*\).*/\1/p' | head -n 1)
+    if [ -n "$xauth_arg" ] && [ -r "$xauth_arg" ]; then
+        echo "$xauth_arg"
+        return 0
+    fi
+    # 2. Check known LightDM / user auth files
+    for f in /var/run/lightdm/root/:0 /run/lightdm/root/:0 /home/*/.Xauthority /root/.Xauthority; do
+        if [ -r "$f" ]; then
+            echo "$f"
+            return 0
+        fi
+    done
+    return 1
+}
+
+LAST_STATE=""
+
+while true; do
+    XAUTH=$(get_xauth)
+    if [ -n "$XAUTH" ]; then
+        export XAUTHORITY="$XAUTH"
+        DPMS_LINE=$(xset -q 2>/dev/null | grep "Monitor is")
+        if [ -n "$DPMS_LINE" ]; then
+            STATE=$(echo "$DPMS_LINE" | awk '{print $3}')
+            if [ "$STATE" != "$LAST_STATE" ]; then
+                if [ "$STATE" = "Off" ]; then
+                    for bl in /sys/class/backlight/*/bl_power; do
+                        [ -w "$bl" ] && echo 1 > "$bl" 2>/dev/null
+                    done
+                elif [ "$STATE" = "On" ]; then
+                    for bl in /sys/class/backlight/*/bl_power; do
+                        [ -w "$bl" ] && echo 0 > "$bl" 2>/dev/null
+                    done
+                fi
+                LAST_STATE="$STATE"
+            fi
+        fi
+    fi
+    sleep 1
+done

@@ -1,0 +1,94 @@
+--- a/drivers/power/supply/generic-adc-battery.c
++++ b/drivers/power/supply/generic-adc-battery.c
+@@ -64,6 +64,7 @@ static void gab_ext_power_changed(struct
+ 
+ static const enum power_supply_property gab_props[] = {
+ 	POWER_SUPPLY_PROP_STATUS,
++	POWER_SUPPLY_PROP_CAPACITY,
+ };
+ 
+ /*
+@@ -98,15 +99,55 @@ static int gab_read_channel(struct gab *
+ 	return ret;
+ }
+ 
++static bool gab_is_charging(struct gab *adc_bat)
++{
++	int volt = 0, cur = 0;
++
++	if (power_supply_am_i_supplied(adc_bat->psy) > 0)
++		return true;
++
++	if (adc_bat->channel[GAB_CURRENT]) {
++		if (gab_read_channel(adc_bat, GAB_CURRENT, &cur) == 0 && cur > 20000)
++			return true;
++	}
++
++	if (adc_bat->channel[GAB_POWER]) {
++		if (gab_read_channel(adc_bat, GAB_POWER, &volt) == 0 && volt > 4600000)
++			return true;
++	}
++
++	return false;
++}
++
+ static int gab_get_property(struct power_supply *psy,
+ 		enum power_supply_property psp, union power_supply_propval *val)
+ {
+ 	struct gab *adc_bat = to_generic_bat(psy);
++	int ret;
+ 
+ 	switch (psp) {
+ 	case POWER_SUPPLY_PROP_STATUS:
+ 		val->intval = adc_bat->status;
+ 		return 0;
++	case POWER_SUPPLY_PROP_CAPACITY:
++		if (adc_bat->channel[GAB_VOLTAGE]) {
++			int volt_uv = 0;
++			int vmin = 3400000, vmax = 4200000;
++
++			ret = gab_read_channel(adc_bat, GAB_VOLTAGE, &volt_uv);
++			if (ret < 0)
++				return ret;
++
++			if (volt_uv <= vmin)
++				val->intval = 0;
++			else if (volt_uv >= vmax)
++				val->intval = 100;
++			else
++				val->intval = ((volt_uv - vmin) * 100) / (vmax - vmin);
++
++			return 0;
++		}
++		return -EINVAL;
+ 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+ 		return gab_read_channel(adc_bat, GAB_VOLTAGE, &val->intval);
+ 	case POWER_SUPPLY_PROP_CURRENT_NOW:
+@@ -130,8 +171,8 @@ static void gab_work(struct work_struct
+ 	adc_bat = container_of(delayed_work, struct gab, bat_work);
+ 	status = adc_bat->status;
+ 
+-	if (!power_supply_am_i_supplied(adc_bat->psy))
+-		adc_bat->status =  POWER_SUPPLY_STATUS_DISCHARGING;
++	if (!gab_is_charging(adc_bat))
++		adc_bat->status = POWER_SUPPLY_STATUS_DISCHARGING;
+ 	else if (gab_charge_finished(adc_bat))
+ 		adc_bat->status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+ 	else
+@@ -139,6 +180,8 @@ static void gab_work(struct work_struct
+ 
+ 	if (status != adc_bat->status)
+ 		power_supply_changed(adc_bat->psy);
++
++	schedule_delayed_work(&adc_bat->bat_work, msecs_to_jiffies(3000));
+ }
+ 
+ static irqreturn_t gab_charged(int irq, void *dev_id)
+@@ -281,6 +324,7 @@ static SIMPLE_DEV_PM_OPS(gab_pm_ops, gab
+ 
+ static const struct of_device_id gab_match[] = {
+ 	{ .compatible = "adc-battery" },
++	{ .compatible = "generic-adc-battery" },
+ 	{ }
+ };
+ MODULE_DEVICE_TABLE(of, gab_match);
