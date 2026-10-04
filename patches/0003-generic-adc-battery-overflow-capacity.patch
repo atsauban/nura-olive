@@ -1,29 +1,44 @@
---- a/drivers/power/supply/generic-adc-battery.c
-+++ b/drivers/power/supply/generic-adc-battery.c
+--- a/drivers/power/supply/generic-adc-battery.c	2026-10-04 21:19:49.394485750 +0700
++++ b/drivers/power/supply/generic-adc-battery.c	2026-10-04 21:27:01.755534837 +0700
+@@ -38,7 +38,7 @@
+ 	[GAB_VOLTAGE]	= "voltage",
+ 	[GAB_CURRENT]	= "current",
+ 	[GAB_POWER]	= "power",
+-	[GAB_TEMP]	= "temperature",
++	[GAB_TEMP]	= "temp",
+ };
+ 
+ struct gab {
 @@ -48,6 +48,8 @@
  	struct delayed_work bat_work;
  	int status;
  	struct gpio_desc *charge_finished;
-+	int last_capacity;
 +	int avg_voltage;
++	int last_capacity;
  };
  
  static struct gab *to_generic_bat(struct power_supply *psy)
-@@ -64,6 +66,13 @@
+@@ -64,12 +66,15 @@
  
  static const enum power_supply_property gab_props[] = {
  	POWER_SUPPLY_PROP_STATUS,
 +	POWER_SUPPLY_PROP_HEALTH,
 +	POWER_SUPPLY_PROP_PRESENT,
-+	POWER_SUPPLY_PROP_CAPACITY,
 +	POWER_SUPPLY_PROP_TECHNOLOGY,
++	POWER_SUPPLY_PROP_CAPACITY,
 +	POWER_SUPPLY_PROP_SCOPE,
 +	POWER_SUPPLY_PROP_MODEL_NAME,
 +	POWER_SUPPLY_PROP_MANUFACTURER,
  };
  
- /*
-@@ -90,31 +99,98 @@
+-/*
+- * This properties are set based on the received platform data and this
+- * should correspond one-to-one with enum chan_type.
+- */
+ static const enum power_supply_property gab_dyn_props[] = {
+ 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+ 	POWER_SUPPLY_PROP_CURRENT_NOW,
+@@ -90,12 +95,23 @@
  	int ret;
  
  	ret = iio_read_channel_processed(adc_bat->channel[channel], result);
@@ -34,6 +49,9 @@
 -		*result *= 1000;
 +		return ret;
 +	}
++
++	if (channel == GAB_TEMP)
++		*result /= 100; /* mC to deci-deg C (33000 -> 330 = 33.0 C) */
  
 -	return ret;
 +	return 0;
@@ -41,28 +59,14 @@
 +
 +static bool gab_is_charging(struct gab *adc_bat)
 +{
-+	int vbus = 0;
-+
-+	if (power_supply_am_i_supplied(adc_bat->psy) > 0)
++	if (power_supply_is_system_supplied() > 0)
 +		return true;
-+
-+	if (adc_bat->channel[GAB_POWER]) {
-+		if (gab_read_channel(adc_bat, GAB_POWER, &vbus) == 0) {
-+			if (vbus >= 4000000)
-+				return true;
-+		}
-+	}
 +
 +	return false;
  }
  
  static int gab_get_property(struct power_supply *psy,
- 		enum power_supply_property psp, union power_supply_propval *val)
- {
- 	struct gab *adc_bat = to_generic_bat(psy);
-+	int ret;
- 
- 	switch (psp) {
+@@ -107,6 +123,27 @@
  	case POWER_SUPPLY_PROP_STATUS:
  		val->intval = adc_bat->status;
  		return 0;
@@ -72,31 +76,11 @@
 +	case POWER_SUPPLY_PROP_PRESENT:
 +		val->intval = 1;
 +		return 0;
-+	case POWER_SUPPLY_PROP_CAPACITY:
-+		if (adc_bat->last_capacity >= 0) {
-+			val->intval = adc_bat->last_capacity;
-+			return 0;
-+		}
-+		if (adc_bat->channel[GAB_VOLTAGE]) {
-+			int volt_uv = 0;
-+			int vmin = 3400000, vmax = 4200000;
-+
-+			ret = gab_read_channel(adc_bat, GAB_VOLTAGE, &volt_uv);
-+			if (ret < 0)
-+				return ret;
-+
-+			if (volt_uv <= vmin)
-+				val->intval = 0;
-+			else if (volt_uv >= vmax)
-+				val->intval = 100;
-+			else
-+				val->intval = ((volt_uv - vmin) * 100) / (vmax - vmin);
-+
-+			return 0;
-+		}
-+		return -EINVAL;
 +	case POWER_SUPPLY_PROP_TECHNOLOGY:
 +		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
++		return 0;
++	case POWER_SUPPLY_PROP_CAPACITY:
++		val->intval = (adc_bat->last_capacity >= 0) ? adc_bat->last_capacity : 50;
 +		return 0;
 +	case POWER_SUPPLY_PROP_SCOPE:
 +		val->intval = POWER_SUPPLY_SCOPE_SYSTEM;
@@ -108,26 +92,9 @@
 +		val->strval = "Xiaomi";
 +		return 0;
  	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-+		if (adc_bat->avg_voltage > 0) {
-+			val->intval = adc_bat->avg_voltage;
-+			return 0;
-+		}
  		return gab_read_channel(adc_bat, GAB_VOLTAGE, &val->intval);
  	case POWER_SUPPLY_PROP_CURRENT_NOW:
- 		return gab_read_channel(adc_bat, GAB_CURRENT, &val->intval);
- 	case POWER_SUPPLY_PROP_POWER_NOW:
- 		return gab_read_channel(adc_bat, GAB_POWER, &val->intval);
- 	case POWER_SUPPLY_PROP_TEMP:
--		return gab_read_channel(adc_bat, GAB_TEMP, &val->intval);
-+		ret = gab_read_channel(adc_bat, GAB_TEMP, &val->intval);
-+		if (ret < 0)
-+			return ret;
-+		val->intval /= 1000;
-+		return 0;
- 	default:
- 		return -EINVAL;
- 	}
-@@ -125,20 +201,54 @@
+@@ -125,20 +162,56 @@
  	struct gab *adc_bat;
  	struct delayed_work *delayed_work;
  	int status;
@@ -142,9 +109,6 @@
 -	if (!power_supply_am_i_supplied(adc_bat->psy))
 -		adc_bat->status =  POWER_SUPPLY_STATUS_DISCHARGING;
 -	else if (gab_charge_finished(adc_bat))
--		adc_bat->status = POWER_SUPPLY_STATUS_NOT_CHARGING;
--	else
--		adc_bat->status = POWER_SUPPLY_STATUS_CHARGING;
 +	if (adc_bat->channel[GAB_VOLTAGE] &&
 +	    gab_read_channel(adc_bat, GAB_VOLTAGE, &vbat) == 0) {
 +		if (adc_bat->avg_voltage == 0)
@@ -162,11 +126,11 @@
 +		if (adc_bat->last_capacity < 0) {
 +			adc_bat->last_capacity = new_cap;
 +		} else if (!gab_is_charging(adc_bat)) {
-+			/* While discharging, never jump up due to load drop */
++			/* While discharging, do not jump up on load transient */
 +			if (new_cap < adc_bat->last_capacity)
 +				adc_bat->last_capacity = new_cap;
 +		} else {
-+			/* While charging, never jump down */
++			/* While charging, do not jump down */
 +			if (new_cap > adc_bat->last_capacity)
 +				adc_bat->last_capacity = new_cap;
 +		}
@@ -174,6 +138,10 @@
 +
 +	if (!gab_is_charging(adc_bat)) {
 +		adc_bat->status = POWER_SUPPLY_STATUS_DISCHARGING;
++	} else if (gab_charge_finished(adc_bat)) {
+ 		adc_bat->status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+-	else
+-		adc_bat->status = POWER_SUPPLY_STATUS_CHARGING;
 +	} else {
 +		if (adc_bat->avg_voltage >= 4190000)
 +			adc_bat->status = POWER_SUPPLY_STATUS_FULL;
@@ -188,7 +156,7 @@
  }
  
  static irqreturn_t gab_charged(int irq, void *dev_id)
-@@ -173,6 +283,8 @@
+@@ -173,6 +246,8 @@
  
  	/* bootup default values for the battery */
  	adc_bat->status = POWER_SUPPLY_STATUS_DISCHARGING;
@@ -197,20 +165,3 @@
  	psy_desc->type = POWER_SUPPLY_TYPE_BATTERY;
  	psy_desc->get_property = gab_get_property;
  	psy_desc->external_power_changed = gab_ext_power_changed;
-@@ -197,6 +309,8 @@
- 	 */
- 	for (chan = 0; chan < ARRAY_SIZE(gab_chan_name); chan++) {
- 		adc_bat->channel[chan] = devm_iio_channel_get(&pdev->dev, gab_chan_name[chan]);
-+		if (IS_ERR(adc_bat->channel[chan]) && chan == GAB_TEMP)
-+			adc_bat->channel[chan] = devm_iio_channel_get(&pdev->dev, "temp");
- 		if (IS_ERR(adc_bat->channel[chan])) {
- 			ret = PTR_ERR(adc_bat->channel[chan]);
- 			if (ret != -ENODEV)
-@@ -280,6 +394,7 @@
- static SIMPLE_DEV_PM_OPS(gab_pm_ops, gab_suspend, gab_resume);
- 
- static const struct of_device_id gab_match[] = {
-+	{ .compatible = "generic-adc-battery" },
- 	{ .compatible = "adc-battery" },
- 	{ }
- };

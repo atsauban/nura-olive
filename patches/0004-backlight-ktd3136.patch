@@ -178,6 +178,6 @@ diff -Naur a/drivers/video/backlight/ktd3136.c b/drivers/video/backlight/ktd3136
 +};
 +module_i2c_driver(ktd3136_driver);
 +
-+MODULE_AUTHOR("Antigravity");
++MODULE_AUTHOR("atsa");
 +MODULE_DESCRIPTION("Kinetic KTD3136/KTD3137 Backlight Driver");
 +MODULE_LICENSE("GPL");
