@@ -1,5 +1,5 @@
---- a/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts	2026-10-04 09:11:15.883391258 +0000
-+++ b/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts	2026-10-04 09:28:32.073055321 +0000
+--- a/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts
++++ b/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts
 @@ -7,6 +7,9 @@
  
  #include <dt-bindings/arm/qcom,ids.h>
@@ -26,7 +26,7 @@
  	chosen {
  		#address-cells = <2>;
  		#size-cells = <2>;
-@@ -101,13 +113,23 @@
+@@ -101,11 +113,22 @@
  };
  
  &blsp1_spi3 {
@@ -52,44 +52,42 @@
 +		status = "okay";
 +	};
  };
--
- &blsp2_spi2 {
- 	status = "okay";
  
-@@ -120,16 +142,14 @@
+ &blsp2_spi2 {
+@@ -120,28 +143,13 @@
  };
  
  &blsp2_i2c1 {
 -	status = "disabled";
 -	
+-	lm3697@36 {
+-		compatible = "ti,lm3697";
 +	status = "okay";
- 	lm3697@36 {
- 		compatible = "ti,lm3697";
++	backlight@36 {
++		compatible = "kinetic,ktd3136";
  		reg = <0x36>;
- 		#address-cells = <1>;
- 		#size-cells = <0>;
+-		#address-cells = <1>;
+-		#size-cells = <0>;
  		enable-gpios = <&pm8953_gpios 4 GPIO_ACTIVE_HIGH>;
 -		status = "disabled";
 -
+-		lm3697_leds: led@0 {
+-			reg = <0>;
+-			led-sources = <0 1 2>;
+-			ti,brightness-resolution = <255>;
+-			ramp-up-us = <200000>;
+-			ramp-down-us = <200000>;
+-			label = "white:backlight";
+-			linux,default-trigger = "backlight";
+-		};
 +		status = "okay";
- 		lm3697_leds: led@0 {
- 			reg = <0>;
- 			led-sources = <0 1 2>;
-@@ -138,12 +158,10 @@
- 			ramp-down-us = <200000>;
- 			label = "white:backlight";
- 			linux,default-trigger = "backlight";
-+			default-state = "on";
- 		};
  	};
 -
 -	/* ktd3137@36 */
  };
--
+ 
  &pmi632_vib {
- 	status = "okay";
- };
-@@ -316,6 +334,20 @@
+@@ -316,6 +324,20 @@
  &tlmm {
  	gpio-reserved-ranges = <0 4>;
  
@@ -110,17 +108,16 @@
  	gpio_keys_default: gpio-keys-default-state {
  		pins = "gpio91";
  		function = "gpio";
-@@ -340,7 +372,8 @@
+@@ -340,7 +362,7 @@
  };
  
  &usb {
 -	dr_mode = "peripheral";
 +	dr_mode = "otg";
-+	extcon = <&usb_vbus>;
  	extcon = <&usb_vbus>;
  	status = "okay";
  };
-@@ -354,6 +387,7 @@
+@@ -354,6 +376,7 @@
  
  &wcnss {
  	vddpx-supply = <&pm8953_l5>;
@@ -128,11 +125,10 @@
  	status = "okay";
  };
  
-@@ -372,3 +406,53 @@
+@@ -372,3 +395,52 @@
  &xo_board {
  	clock-frequency = <19200000>;
  };
-+
 +&bam_dmux {
 +	status = "okay";
 +};

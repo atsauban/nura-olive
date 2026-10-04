@@ -49,7 +49,7 @@
 +		if (gab_read_channel(adc_bat, GAB_VOLTAGE, &vbat) == 0 &&
 +		    gab_read_channel(adc_bat, GAB_POWER, &vph) == 0) {
 +			/* When charging, VPH_PWR is driven by charger (> 4.35V or > VBAT + 25mV) */
-+			if (vph > 4350000 || vph > (vbat + 25000))
++			if (vph > 4350000 || vph > (vbat + 2000))
 +				return true;
 +		}
 +	}
@@ -70,7 +70,7 @@
 +	case POWER_SUPPLY_PROP_CAPACITY:
 +		if (adc_bat->channel[GAB_VOLTAGE]) {
 +			int volt_uv = 0;
-+			int vmin = 3400000, vmax = 4200000;
++			int vmin = 3400000, vmax = 4350000;
 +
 +			ret = gab_read_channel(adc_bat, GAB_VOLTAGE, &volt_uv);
 +			if (ret < 0)

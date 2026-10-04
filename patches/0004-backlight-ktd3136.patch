@@ -1,0 +1,183 @@
+diff -Naur a/drivers/video/backlight/Kconfig b/drivers/video/backlight/Kconfig
+--- a/drivers/video/backlight/Kconfig	2026-10-04 09:44:15.068451670 +0000
++++ b/drivers/video/backlight/Kconfig	2026-10-04 09:44:15.068451670 +0000
+@@ -514,4 +514,12 @@
+ 	  If you have a LCD backlight adjustable by LED class driver, say Y
+ 	  to enable this driver.
+ 
++config BACKLIGHT_KTD3136
++	tristate "Backlight Driver for Kinetic KTD3136/KTD3137"
++	depends on I2C
++	select REGMAP_I2C
++	help
++	  If you have a backlight powered by a Kinetic KTD3136 or KTD3137,
++	  say Y or M here.
++
+ endif # BACKLIGHT_CLASS_DEVICE
+diff -Naur a/drivers/video/backlight/Makefile b/drivers/video/backlight/Makefile
+--- a/drivers/video/backlight/Makefile	2026-10-04 09:44:15.068451670 +0000
++++ b/drivers/video/backlight/Makefile	2026-10-04 09:44:15.068451670 +0000
+@@ -62,3 +62,4 @@
+ obj-$(CONFIG_BACKLIGHT_ARCXCNN) 	+= arcxcnn_bl.o
+ obj-$(CONFIG_BACKLIGHT_RAVE_SP)		+= rave-sp-backlight.o
+ obj-$(CONFIG_BACKLIGHT_LED)		+= led_bl.o
++obj-$(CONFIG_BACKLIGHT_KTD3136)	+= ktd3136.o
+diff -Naur a/drivers/video/backlight/ktd3136.c b/drivers/video/backlight/ktd3136.c
+--- a/drivers/video/backlight/ktd3136.c	1970-01-01 00:00:00.000000000 +0000
++++ b/drivers/video/backlight/ktd3136.c	2026-10-04 09:44:15.068451670 +0000
+@@ -0,0 +1,155 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Kinetic Technologies KTD3136 / KTD3137 3-Channel LED Backlight Driver
++ */
++
++#include <linux/backlight.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/regmap.h>
++
++#define KTD3136_REG_ID          0x00
++#define KTD3136_REG_RESET       0x01
++#define KTD3136_REG_MODE        0x02
++#define KTD3136_REG_CONTROL     0x03
++#define KTD3136_REG_LSB         0x04
++#define KTD3136_REG_MSB         0x05
++#define KTD3136_REG_PWM         0x06
++#define KTD3136_REG_RAMP        0x07
++
++#define KTD3136_MAX_BRIGHTNESS  2047
++#define KTD3136_DEFAULT_BRIGHTNESS 2047
++
++struct ktd3136_data {
++	struct device *dev;
++	struct regmap *regmap;
++	struct gpio_desc *enable_gpio;
++};
++
++static const struct regmap_config ktd3136_regmap_config = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = 0x0b,
++};
++
++static int ktd3136_update_status(struct backlight_device *bl)
++{
++	struct ktd3136_data *data = bl_get_data(bl);
++	int brightness = bl->props.brightness;
++	int ret;
++
++	if (brightness == 0 || backlight_is_blank(bl)) {
++		return regmap_write(data->regmap, KTD3136_REG_MODE, 0x98);
++	}
++
++	if (brightness > KTD3136_MAX_BRIGHTNESS)
++		brightness = KTD3136_MAX_BRIGHTNESS;
++
++	/* Control: 20mA full scale, enable all 3 channels */
++	regmap_write(data->regmap, KTD3136_REG_CONTROL, 0x6f);
++
++	/* PWM / Channel enable */
++	regmap_write(data->regmap, KTD3136_REG_PWM, 0x07);
++
++	/* Set ramp */
++	regmap_write(data->regmap, KTD3136_REG_RAMP, 0x00);
++
++	/* 11-bit brightness */
++	ret = regmap_write(data->regmap, KTD3136_REG_LSB, brightness & 0x07);
++	if (ret)
++		return ret;
++
++	ret = regmap_write(data->regmap, KTD3136_REG_MSB, (brightness >> 3) & 0xff);
++	if (ret)
++		return ret;
++
++	/* Mode: Enable backlight */
++	return regmap_write(data->regmap, KTD3136_REG_MODE, 0x99);
++}
++
++static const struct backlight_ops ktd3136_ops = {
++	.options = BL_CORE_SUSPENDRESUME,
++	.update_status = ktd3136_update_status,
++};
++
++static int ktd3136_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct backlight_properties props = { };
++	struct backlight_device *bl;
++	struct ktd3136_data *data;
++	unsigned int val;
++	int ret;
++
++	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
++	if (!data)
++		return -ENOMEM;
++
++	data->dev = dev;
++
++	data->enable_gpio = devm_gpiod_get_optional(dev, "enable", GPIOD_OUT_HIGH);
++	if (IS_ERR(data->enable_gpio))
++		return dev_err_probe(dev, PTR_ERR(data->enable_gpio),
++				      "Failed to get enable gpio\n");
++
++	if (data->enable_gpio)
++		gpiod_set_value_cansleep(data->enable_gpio, 1);
++	msleep(20);
++
++	data->regmap = devm_regmap_init_i2c(client, &ktd3136_regmap_config);
++	if (IS_ERR(data->regmap))
++		return dev_err_probe(dev, PTR_ERR(data->regmap),
++				      "Failed to init regmap\n");
++
++	ret = regmap_read(data->regmap, KTD3136_REG_ID, &val);
++	if (ret)
++		return dev_err_probe(dev, ret, "Failed to read ID register\n");
++
++	dev_info(dev, "Found KTD3136/KTD3137 (ID: 0x%02x)\n", val);
++
++	props.type = BACKLIGHT_RAW;
++	props.max_brightness = KTD3136_MAX_BRIGHTNESS;
++	props.brightness = KTD3136_DEFAULT_BRIGHTNESS;
++
++	bl = devm_backlight_device_register(dev, "backlight", dev, data,
++					     &ktd3136_ops, &props);
++	if (IS_ERR(bl))
++		return dev_err_probe(dev, PTR_ERR(bl),
++				      "Failed to register backlight device\n");
++
++	i2c_set_clientdata(client, bl);
++	backlight_update_status(bl);
++
++	return 0;
++}
++
++static const struct of_device_id ktd3136_of_match[] = {
++	{ .compatible = "kinetic,ktd3136" },
++	{ .compatible = "kinetic,ktd3137" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, ktd3136_of_match);
++
++static const struct i2c_device_id ktd3136_i2c_id[] = {
++	{ "ktd3136", 0 },
++	{ "ktd3137", 0 },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, ktd3136_i2c_id);
++
++static struct i2c_driver ktd3136_driver = {
++	.driver = {
++		.name = "ktd3136",
++		.of_match_table = ktd3136_of_match,
++	},
++	.probe = ktd3136_probe,
++	.id_table = ktd3136_i2c_id,
++};
++module_i2c_driver(ktd3136_driver);
++
++MODULE_AUTHOR("Antigravity");
++MODULE_DESCRIPTION("Kinetic KTD3136/KTD3137 Backlight Driver");
++MODULE_LICENSE("GPL");
