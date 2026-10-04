@@ -10,23 +10,24 @@
  #include "sdm439.dtsi"
  #include "pm8953.dtsi"
  #include "pmi632.dtsi"
-@@ -21,6 +24,15 @@
+@@ -21,6 +24,16 @@
  	qcom,msm-id = <QCOM_ID_SDM439 0>;
  	qcom,board-id = <QCOM_BOARD_ID_QRD 8>;
  
 +	battery: generic-adc-battery {
 +		compatible = "generic-adc-battery";
 +		io-channels = <&pmi632_adc ADC5_VBAT_SNS>,
-+			      <&pmi632_adc ADC5_VPH_PWR>,
-+			      <&pmi632_adc ADC5_USB_IN_I>;
-+		io-channel-names = "voltage", "power", "current";
++			      <&pmi632_adc ADC5_USB_IN_V_16>,
++			      <&pmi632_adc ADC5_USB_IN_I>,
++			      <&pmi632_adc ADC5_CHG_TEMP>;
++		io-channel-names = "voltage", "power", "current", "temp";
 +		status = "okay";
 +	};
 +
  	chosen {
  		#address-cells = <2>;
  		#size-cells = <2>;
-@@ -101,11 +113,22 @@
+@@ -101,11 +114,22 @@
  };
  
  &blsp1_spi3 {
@@ -54,7 +55,7 @@
  };
  
  &blsp2_spi2 {
-@@ -120,28 +143,13 @@
+@@ -120,28 +144,13 @@
  };
  
  &blsp2_i2c1 {
@@ -87,7 +88,7 @@
  };
  
  &pmi632_vib {
-@@ -316,6 +324,20 @@
+@@ -316,6 +325,20 @@
  &tlmm {
  	gpio-reserved-ranges = <0 4>;
  
@@ -108,7 +109,7 @@
  	gpio_keys_default: gpio-keys-default-state {
  		pins = "gpio91";
  		function = "gpio";
-@@ -340,7 +362,7 @@
+@@ -340,7 +363,7 @@
  };
  
  &usb {
@@ -117,7 +118,7 @@
  	extcon = <&usb_vbus>;
  	status = "okay";
  };
-@@ -354,6 +376,7 @@
+@@ -354,6 +377,7 @@
  
  &wcnss {
  	vddpx-supply = <&pm8953_l5>;
@@ -125,7 +126,7 @@
  	status = "okay";
  };
  
-@@ -372,3 +395,52 @@
+@@ -372,3 +396,52 @@
  &xo_board {
  	clock-frequency = <19200000>;
  };
