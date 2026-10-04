@@ -111,7 +111,16 @@
  };
  
  &venus {
-@@ -354,6 +380,7 @@
+@@ -345,7 +371,6 @@
+ };
+ 
+ &usb {
+-	dr_mode = "peripheral";
+-	extcon = <&usb_vbus>;
++	dr_mode = "otg";
+ 	status = "okay";
+ };
+@@ -354,6 +379,7 @@
  
  &wcnss {
  	vddpx-supply = <&pm8953_l5>;
@@ -119,7 +128,7 @@
  	status = "okay";
  };
  
-@@ -372,3 +399,53 @@
+@@ -372,3 +398,53 @@
  &xo_board {
  	clock-frequency = <19200000>;
  };
@@ -168,7 +177,7 @@
 +	connector {
 +		compatible = "usb-c-connector";
 +		label = "USB-C";
-+		power-role = "sink";
++		power-role = "dual";
 +		data-role = "dual";
 +		try-power-role = "sink";
 +	};
