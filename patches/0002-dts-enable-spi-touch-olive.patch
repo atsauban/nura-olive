@@ -1,5 +1,5 @@
---- a/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts
-+++ b/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts
+--- a/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts	2026-10-04 09:11:15.883391258 +0000
++++ b/arch/arm64/boot/dts/qcom/sdm439-xiaomi-olive.dts	2026-10-04 09:28:32.073055321 +0000
 @@ -7,6 +7,9 @@
  
  #include <dt-bindings/arm/qcom,ids.h>
@@ -26,16 +26,16 @@
  	chosen {
  		#address-cells = <2>;
  		#size-cells = <2>;
-@@ -101,11 +113,23 @@
+@@ -101,13 +113,23 @@
  };
  
  &blsp1_spi3 {
 -	status = "disabled";
-+	status = "okay";
- 
+-
 -	/* ilitek,ili9881h@0 */
 -	/* novatek,nt36525b@1 */
 -	/* focaltech,ft8006s@2 */
++	status = "okay";
 +	touchscreen@0 {
 +		compatible = "focaltech,fts", "focaltech,ft8006s";
 +		reg = <0>;
@@ -52,49 +52,47 @@
 +		status = "okay";
 +	};
  };
- 
+-
  &blsp2_spi2 {
-@@ -120,28 +144,16 @@
+ 	status = "okay";
+ 
+@@ -120,16 +142,14 @@
  };
  
  &blsp2_i2c1 {
 -	status = "disabled";
 -	
--	lm3697@36 {
--		compatible = "ti,lm3697";
 +	status = "okay";
-+
-+	backlight: backlight@36 {
-+		compatible = "kinetic,ktd3136";
+ 	lm3697@36 {
+ 		compatible = "ti,lm3697";
  		reg = <0x36>;
--		#address-cells = <1>;
--		#size-cells = <0>;
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
  		enable-gpios = <&pm8953_gpios 4 GPIO_ACTIVE_HIGH>;
 -		status = "disabled";
 -
--		lm3697_leds: led@0 {
--			reg = <0>;
--			led-sources = <0 1 2>;
--			ti,brightness-resolution = <255>;
--			ramp-up-us = <200000>;
--			ramp-down-us = <200000>;
--			label = "white:backlight";
--			linux,default-trigger = "backlight";
--		};
-+		default-brightness = <2048>;
-+		max-brightness = <2048>;
 +		status = "okay";
+ 		lm3697_leds: led@0 {
+ 			reg = <0>;
+ 			led-sources = <0 1 2>;
+@@ -138,12 +158,10 @@
+ 			ramp-down-us = <200000>;
+ 			label = "white:backlight";
+ 			linux,default-trigger = "backlight";
++			default-state = "on";
+ 		};
  	};
 -
 -	/* ktd3137@36 */
  };
- 
+-
  &pmi632_vib {
-@@ -329,6 +341,20 @@
- 		drive-strength = <2>;
- 		bias-disable;
- 	};
-+
+ 	status = "okay";
+ };
+@@ -316,6 +334,20 @@
+ &tlmm {
+ 	gpio-reserved-ranges = <0 4>;
+ 
 +	ts_int_active: ts-int-active-state {
 +		pins = "gpio65";
 +		function = "gpio";
@@ -108,19 +106,21 @@
 +		drive-strength = <8>;
 +		bias-disable;
 +	};
- };
- 
- &venus {
-@@ -345,7 +371,7 @@
++
+ 	gpio_keys_default: gpio-keys-default-state {
+ 		pins = "gpio91";
+ 		function = "gpio";
+@@ -340,7 +372,8 @@
  };
  
  &usb {
 -	dr_mode = "peripheral";
 +	dr_mode = "otg";
++	extcon = <&usb_vbus>;
  	extcon = <&usb_vbus>;
  	status = "okay";
  };
-@@ -354,6 +380,7 @@
+@@ -354,6 +387,7 @@
  
  &wcnss {
  	vddpx-supply = <&pm8953_l5>;
@@ -128,7 +128,7 @@
  	status = "okay";
  };
  
-@@ -372,3 +399,53 @@
+@@ -372,3 +406,53 @@
  &xo_board {
  	clock-frequency = <19200000>;
  };
