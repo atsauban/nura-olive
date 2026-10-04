@@ -17,7 +17,7 @@
 +	battery: generic-adc-battery {
 +		compatible = "generic-adc-battery";
 +		io-channels = <&pmi632_adc ADC5_VBAT_SNS>,
-+			      <&pmi632_adc ADC5_USB_IN_V_16>,
++			      <&pmi632_adc ADC5_VPH_PWR>,
 +			      <&pmi632_adc ADC5_USB_IN_I>;
 +		io-channel-names = "voltage", "power", "current";
 +		status = "okay";
@@ -111,16 +111,16 @@
  };
  
  &venus {
-@@ -345,7 +371,6 @@
+@@ -345,7 +371,7 @@
  };
  
  &usb {
 -	dr_mode = "peripheral";
--	extcon = <&usb_vbus>;
 +	dr_mode = "otg";
+ 	extcon = <&usb_vbus>;
  	status = "okay";
  };
-@@ -354,6 +379,7 @@
+@@ -354,6 +380,7 @@
  
  &wcnss {
  	vddpx-supply = <&pm8953_l5>;
@@ -128,7 +128,7 @@
  	status = "okay";
  };
  
-@@ -372,3 +398,53 @@
+@@ -372,3 +399,53 @@
  &xo_board {
  	clock-frequency = <19200000>;
  };

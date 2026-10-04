@@ -20,7 +20,7 @@
  };
  
  /*
-@@ -90,23 +96,78 @@
+@@ -90,23 +96,77 @@
  	int ret;
  
  	ret = iio_read_channel_processed(adc_bat->channel[channel], result);
@@ -40,19 +40,18 @@
 +
 +static bool gab_is_charging(struct gab *adc_bat)
 +{
-+	int volt = 0, cur = 0;
++	int vbat = 0, vph = 0;
 +
 +	if (power_supply_am_i_supplied(adc_bat->psy) > 0)
 +		return true;
 +
-+	if (adc_bat->channel[GAB_POWER]) {
-+		if (gab_read_channel(adc_bat, GAB_POWER, &volt) == 0 && volt > 4400000)
-+			return true;
-+	}
-+
-+	if (adc_bat->channel[GAB_CURRENT]) {
-+		if (gab_read_channel(adc_bat, GAB_CURRENT, &cur) == 0 && cur > 50000)
-+			return true;
++	if (adc_bat->channel[GAB_VOLTAGE] && adc_bat->channel[GAB_POWER]) {
++		if (gab_read_channel(adc_bat, GAB_VOLTAGE, &vbat) == 0 &&
++		    gab_read_channel(adc_bat, GAB_POWER, &vph) == 0) {
++			/* When charging, VPH_PWR is driven by charger (> 4.35V or > VBAT + 25mV) */
++			if (vph > 4350000 || vph > (vbat + 25000))
++				return true;
++		}
 +	}
 +
 +	return false;
@@ -102,7 +101,7 @@
  	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
  		return gab_read_channel(adc_bat, GAB_VOLTAGE, &val->intval);
  	case POWER_SUPPLY_PROP_CURRENT_NOW:
-@@ -130,8 +191,8 @@
+@@ -130,8 +190,8 @@
  	adc_bat = container_of(delayed_work, struct gab, bat_work);
  	status = adc_bat->status;
  
@@ -113,7 +112,7 @@
  	else if (gab_charge_finished(adc_bat))
  		adc_bat->status = POWER_SUPPLY_STATUS_NOT_CHARGING;
  	else
-@@ -139,6 +200,8 @@
+@@ -139,6 +199,8 @@
  
  	if (status != adc_bat->status)
  		power_supply_changed(adc_bat->psy);
@@ -122,7 +121,7 @@
  }
  
  static irqreturn_t gab_charged(int irq, void *dev_id)
-@@ -198,6 +261,14 @@
+@@ -198,6 +260,14 @@
  	for (chan = 0; chan < ARRAY_SIZE(gab_chan_name); chan++) {
  		adc_bat->channel[chan] = devm_iio_channel_get(&pdev->dev, gab_chan_name[chan]);
  		if (IS_ERR(adc_bat->channel[chan])) {
@@ -137,7 +136,7 @@
  			ret = PTR_ERR(adc_bat->channel[chan]);
  			if (ret != -ENODEV)
  				return dev_err_probe(&pdev->dev, ret, "Failed to get ADC channel %s\n", gab_chan_name[chan]);
-@@ -273,7 +344,6 @@
+@@ -273,7 +343,6 @@
  	/* Schedule timer to check current status */
  	schedule_delayed_work(&adc_bat->bat_work,
  			      msecs_to_jiffies(JITTER_DEFAULT));
@@ -145,7 +144,7 @@
  	return 0;
  }
  
-@@ -281,6 +351,7 @@
+@@ -281,6 +350,7 @@
  
  static const struct of_device_id gab_match[] = {
  	{ .compatible = "adc-battery" },
@@ -153,7 +152,7 @@
  	{ }
  };
  MODULE_DEVICE_TABLE(of, gab_match);
-@@ -288,13 +359,14 @@
+@@ -288,13 +358,14 @@
  static struct platform_driver gab_driver = {
  	.driver		= {
  		.name	= "generic-adc-battery",
